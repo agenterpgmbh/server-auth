@@ -27,15 +27,19 @@ class AuthSamlProvider(models.Model):
 
         # TODO: we should cache those results somewhere because it is
         # really costly to always recreate a login variable from buffers
-        server = lasso.Server.newFromBuffers(
-            self.sp_metadata,
-            self.sp_pkey
-        )
-        server.addProviderFromBuffer(
-            lasso.PROVIDER_ROLE_IDP,
-            self.idp_metadata
-        )
-        return lasso.Login(server)
+        try:
+            server = lasso.Server.newFromBuffers(
+                self.sp_metadata,
+                self.sp_pkey or None
+            )
+            server.addProviderFromBuffer(
+                lasso.PROVIDER_ROLE_IDP,
+                self.idp_metadata
+            )
+        except AttributeError:
+            return False
+        else:
+            return lasso.Login(server)
 
     @api.multi
     def _get_matching_attr_for_provider(self):
@@ -56,17 +60,20 @@ class AuthSamlProvider(models.Model):
 
         login = self._get_lasso_for_provider()
 
-        # ! -- this is the part that MUST be performed on each call and
-        # cannot be cached
-        login.initAuthnRequest()
-        login.request.nameIdPolicy.format = None
-        login.request.nameIdPolicy.allowCreate = True
-        login.msgRelayState = simplejson.dumps(state)
-        login.buildAuthnRequestMsg()
+        if login:
+            # ! -- this is the part that MUST be performed on each call and
+            # cannot be cached
+            login.initAuthnRequest()
+            login.request.nameIdPolicy.format = None
+            login.request.nameIdPolicy.allowCreate = True
+            login.msgRelayState = simplejson.dumps(state)
+            login.buildAuthnRequestMsg()
 
-        # msgUrl is a fully encoded url ready for redirect use
-        # obtained after the buildAuthnRequestMsg() call
-        return login.msgUrl
+            # msgUrl is a fully encoded url ready for redirect use
+            # obtained after the buildAuthnRequestMsg() call
+            return login.msgUrl
+        else:
+            return False
 
     # Name of the OAuth2 entity, authentic, xcg...
     name = fields.Char('Provider name')
