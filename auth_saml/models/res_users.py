@@ -66,7 +66,7 @@ class ResUser(models.Model):
         try:
             _logger.info(
                 "trying to authentificate for provider %s with token %s"
-                % (provider, token)
+                % (provider_id, token)
             )
             login.processAuthnResponseMsg(token)
         except (lasso.DsError, lasso.ProfileCannotVerifySignatureError):
