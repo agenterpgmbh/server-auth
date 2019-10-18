@@ -236,6 +236,16 @@ class ResUser(models.Model):
                 # exception that occurred in our execution frame
                 raise
 
+    def _set_password(self, password):
+        self.ensure_one()
+        """ Encrypts then stores the provided plaintext password for the user
+        ``self``
+        """
+        if password:
+            if self._allow_saml_and_password() or self.id == SUPERUSER_ID:
+                encrypted = self._crypt_context().encrypt(password)
+                self._set_encrypted_password(encrypted)
+
     @api.multi
     def write(self, vals):
         """Override to clear out the user's password when setting an SAML user
