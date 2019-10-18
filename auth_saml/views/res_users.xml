@@ -13,7 +13,7 @@
                 <page string="SAML">
                     <group>
                         <field name="saml_provider_id" />
-                        <field name="saml_uid" attrs="{'required': [('saml_provider_id', '!=', False)]"/>
+                        <field name="saml_uid" attrs="{'required': [('saml_provider_id', '!=', False)]}"/>
                     </group>
                 </page>
             </xpath>
