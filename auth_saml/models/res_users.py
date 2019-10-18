@@ -64,10 +64,6 @@ class ResUser(models.Model):
         matching_attribute = p._get_matching_attr_for_provider()
 
         try:
-            _logger.info(
-                "trying to authentificate for provider %s with token %s"
-                % (provider_id, token)
-            )
             login.processAuthnResponseMsg(token)
         except (lasso.DsError, lasso.ProfileCannotVerifySignatureError):
             raise Exception("Lasso Profile cannot verify signature")
