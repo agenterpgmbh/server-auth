@@ -24,26 +24,6 @@ class ResUser(models.Model):
     saml_provider_id = fields.Many2one("auth.saml.provider", string="SAML Provider")
     saml_uid = fields.Char("SAML User ID", help="SAML Provider user_id")
 
-    @api.constrains("password_crypt", "password", "saml_uid")
-    def check_no_password_with_saml(self):
-        """Ensure no Odoo user posesses both an SAML user ID and an Odoo
-        password. Except admin which is not constrained by this rule.
-        """
-        if self._allow_saml_and_password():
-            pass
-
-        else:
-            # Super admin is the only user we allow to have a local password
-            # in the database
-            if self.password_crypt and self.saml_uid and self.id is not SUPERUSER_ID:
-                raise ValidationError(
-                    _(
-                        "This database disallows users to "
-                        "have both passwords and SAML IDs. "
-                        "Errors for login %s" % (self.login)
-                    )
-                )
-
     _sql_constraints = [
         (
             "uniq_users_saml_provider_saml_uid",
@@ -156,15 +136,14 @@ class ResUser(models.Model):
         saml_uid = validation["user_id"]
 
         user_ids = self.search(
-            [("saml_uid", "=", saml_uid), ("saml_provider_id", "=", provider)]
+            [("saml_uid", "=", saml_uid), ("saml_provider_id", "=", provider)],
+            limit=1
         )
 
         if not user_ids:
             raise AccessDenied()
 
-        # TODO replace assert by proper raise... asserts do not execute in
-        # production code...
-        assert len(user_ids) == 1
+        user_ids.ensure_one()
         user = user_ids[0]
 
         # now find if a token for this user/provider already exists
@@ -212,17 +191,33 @@ class ResUser(models.Model):
         and the interesting code is inside the "except" clause.
         """
 
-        try:
-            # Attempt a regular login (via other auth addons) first.
-            super(ResUser, self).check_credentials(token)
+        if self._allow_saml_and_password() or self.id is SUPERUSER_ID:
+            try:
+                # Attempt a regular login (via other auth addons) first.
+                super(ResUser, self).check_credentials(token)
 
-        except (AccessDenied, passlib.exc.PasswordSizeError):
-            # since normal auth did not succeed we now try to find if the user
-            # has an active token attached to his uid
+            except (AccessDenied, passlib.exc.PasswordSizeError):
+                # since normal auth did not succeed we now try to find if the user
+                # has an active token attached to his uid
+                res = (
+                    self.env["auth_saml.token"]
+                    .sudo()
+                    .search(
+                        [
+                            ("user_id", "=", self.env.user.id),
+                            ("saml_access_token", "=", token),
+                        ]
+                    )
+                )
+
+                # if the user is not found we re-raise the AccessDenied
+                if not res:
+                    raise AccessDenied()
+        else:
             res = (
                 self.env["auth_saml.token"]
-                .sudo()
-                .search(
+                    .sudo()
+                    .search(
                     [
                         ("user_id", "=", self.env.user.id),
                         ("saml_access_token", "=", token),
@@ -232,19 +227,7 @@ class ResUser(models.Model):
 
             # if the user is not found we re-raise the AccessDenied
             if not res:
-                # TODO: maybe raise a defined exception instead of the last
-                # exception that occurred in our execution frame
-                raise
-
-    def _set_password(self, password):
-        self.ensure_one()
-        """ Encrypts then stores the provided plaintext password for the user
-        ``self``
-        """
-        if password:
-            if self._allow_saml_and_password() or self.id == SUPERUSER_ID:
-                encrypted = self._crypt_context().encrypt(password)
-                self._set_encrypted_password(encrypted)
+                raise AccessDenied()
 
     @api.multi
     def write(self, vals):
