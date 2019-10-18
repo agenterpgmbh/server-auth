@@ -252,7 +252,8 @@ class ResUser(models.Model):
             and self.id is not SUPERUSER_ID
             and not self._allow_saml_and_password()
         ):
-            vals.update({"password": False, "password_crypt": False})
+            vals.pop('password', None)
+            vals.pop('password_crypt', None)
 
         return super(ResUser, self).write(vals)
 
