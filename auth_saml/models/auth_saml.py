@@ -36,7 +36,8 @@ class AuthSamlProvider(models.Model):
                 lasso.PROVIDER_ROLE_IDP,
                 self.idp_metadata
             )
-        except AttributeError:
+        except AttributeError as e:
+            _logger.error("configuring lasso.Login got Exception: %s", str(e))
             return False
         else:
             return lasso.Login(server)
